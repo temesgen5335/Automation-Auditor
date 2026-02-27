@@ -1,0 +1,34 @@
+{
+  "dimensions": [
+    {
+      "id": "langgraph_arch",
+      "name": "LangGraph Architecture",
+      "description": "Evaluation of hierarchical state graphs, parallelism, and state management.",
+      "criteria": [
+        "Use of StateGraph with typed AgentState.",
+        "Evidence of fan-out/parallel execution branches.",
+        "Proper use of state reducers to manage parallel updates."
+      ]
+    },
+    {
+      "id": "judicial_nuance",
+      "name": "Judicial Nuance",
+      "description": "The depth and logic of the dialectical process in the swarm.",
+      "criteria": [
+        "Distinct personas (Prosecutor, Defense, Tech Lead) providing conflicting views.",
+        "Use of structured output to enforce judicial protocols.",
+        "Synthesis of conflicting arguments into a final decision."
+      ]
+    },
+    {
+      "id": "forensic_tools",
+      "name": "Forensic Tool Engineering",
+      "description": "The sophistication of code and document analysis tools.",
+      "criteria": [
+        "AST parsing instead of brittle regex.",
+        "Structured PDF extraction (e.g., Docling).",
+        "Automated Git history analysis for process evaluation."
+      ]
+    }
+  ]
+}

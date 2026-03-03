@@ -5,8 +5,9 @@ from typing import Dict, TypedDict, Annotated, List, Literal
 import operator
 
 from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.sqlite import SqliteSaver
 from src.state import AgentState, AuditReport
-from src.nodes.detectives import repo_investigator_node, doc_analyst_node, vision_inspector_node
+from src.nodes.detectives import repo_investigator_node, doc_analyst_node, vision_inspector_node, pre_audit_check
 from src.nodes.judges import prosecutor_node, defense_node, tech_lead_node, evidence_aggregator
 from src.nodes.supreme_court import chief_justice_node, generate_markdown_report
 
@@ -18,6 +19,13 @@ def error_handler(state: AgentState) -> Dict:
     print("\n!!! Auditor Swarm Encountered a Critical Error !!!")
     return {"executive_summary": "Audit aborted due to critical infrastructure failure (e.g., Git clone failed)."}
 
+def delta_decision(state: AgentState) -> Literal["audit", "skip"]:
+    """Short-circuits if this is a delta audit with no changes."""
+    if state.get("is_delta_audit") and not state.get("changed_files"):
+        print("No changes detected since last audit. Skipping redundant analysis.")
+        return "skip"
+    return "audit"
+
 def check_detective_sanity(state: AgentState) -> Literal["proceed", "error"]:
     """Conditional edge to verify if detectives found minimal evidence to proceed."""
     evidences = state.get("evidences", {})
@@ -26,11 +34,11 @@ def check_detective_sanity(state: AgentState) -> Literal["proceed", "error"]:
         return "error"
     return "proceed"
 
-def create_auditor_graph():
-    """Builds the hierarchical state graph with robust error handling."""
+def create_auditor_graph(checkpointer):
+    """Builds the hierarchical state graph with robust error handling and checkpointing."""
     workflow = StateGraph(AgentState)
 
-    workflow.add_node("start", lambda x: x)
+    workflow.add_node("pre_audit_check", pre_audit_check)
     workflow.add_node("repo_investigator", repo_investigator_node)
     workflow.add_node("doc_analyst", doc_analyst_node)
     workflow.add_node("vision_inspector", vision_inspector_node)
@@ -42,10 +50,20 @@ def create_auditor_graph():
     workflow.add_node("supreme_court", chief_justice_node)
     workflow.add_node("error_handling", error_handler)
 
-    workflow.set_entry_point("start")
-    workflow.add_edge("start", "repo_investigator")
-    workflow.add_edge("start", "doc_analyst")
-    workflow.add_edge("start", "vision_inspector")
+    workflow.set_entry_point("pre_audit_check")
+
+    workflow.add_conditional_edges(
+        "pre_audit_check",
+        delta_decision,
+        {
+            "audit": "repo_investigator",
+            "skip": "supreme_court" # Go straight to synthesis for cached report
+        }
+    )
+    
+    # Pre-audit check also triggers other detectives if not skipped
+    workflow.add_edge("pre_audit_check", "doc_analyst")
+    workflow.add_edge("pre_audit_check", "vision_inspector")
 
     workflow.add_edge("repo_investigator", "evidence_aggregator")
     workflow.add_edge("doc_analyst", "evidence_aggregator")
@@ -71,32 +89,38 @@ def create_auditor_graph():
     workflow.add_edge("supreme_court", END)
     workflow.add_edge("error_handling", END)
 
-    return workflow.compile()
+    return workflow.compile(checkpointer=checkpointer)
 
 def main():
     parser = argparse.ArgumentParser(description="Automaton Auditor: Autonomous Governance Swarm")
     parser.add_argument("repo_url", help="The GitHub repository URL to audit")
     parser.add_argument("--pdf", help="Path to the PDF report (optional)", default="report.pdf")
+    parser.add_argument("--thread-id", help="Thread ID for resuming audits", default="default-audit")
     
     args = parser.parse_args()
     
-    print(f"Initializing Auditor Swarm for: {args.repo_url}")
-    
-    app = create_auditor_graph()
-    
-    initial_state = {
-        "repo_url": args.repo_url,
-        "pdf_path": args.pdf,
-        "rubric_dimensions": [],
-        "evidences": {},
-        "opinions": []
-    }
-    
-    # Run the swarm
-    for output in app.stream(initial_state):
-        # Optional: Print node activity for observability
-        for node_name in output.keys():
-            print(f"Node Executing: {node_name}")
+    # Persistence for resumption (Interrupted Audits)
+    with SqliteSaver.from_conn_string("audit_checkpoints.sqlite") as checkpointer:
+        print(f"Initializing Auditor Swarm for: {args.repo_url}")
+        
+        app = create_auditor_graph(checkpointer)
+        config = {"configurable": {"thread_id": args.thread_id}}
+        
+        initial_state = {
+            "repo_url": args.repo_url,
+            "pdf_path": args.pdf,
+            "rubric_dimensions": [],
+            "evidences": {},
+            "opinions": [],
+            "file_hashes": {},
+            "is_delta_audit": False,
+            "changed_files": []
+        }
+        
+        # Run the swarm with checkpointing
+        for output in app.stream(initial_state, config=config):
+            for node_name in output.keys():
+                print(f"Node Executing: {node_name}")
 
 if __name__ == "__main__":
     main()

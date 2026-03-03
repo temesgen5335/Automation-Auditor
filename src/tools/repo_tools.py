@@ -4,12 +4,30 @@ import subprocess
 import tempfile
 from typing import Dict, List, Optional
 import shutil
+import hashlib
 
 class RepoInvestigatorTools:
     """
     Forensic tools for analyzing GitHub repositories.
     Includes AST parsing for LangGraph structures and Git history analysis.
     """
+
+    @staticmethod
+    def calculate_repo_hashes(repo_path: str) -> Dict[str, str]:
+        """Calculates SHA-256 hashes for all files in the repository."""
+        hashes = {}
+        for root, _, files in os.walk(repo_path):
+            if ".git" in root: continue
+            for file in files:
+                file_path = os.path.join(root, file)
+                rel_path = os.path.relpath(file_path, repo_path)
+                try:
+                    with open(file_path, "rb") as f:
+                        file_hash = hashlib.sha256(f.read()).hexdigest()
+                    hashes[rel_path] = file_hash
+                except Exception:
+                    continue
+        return hashes
 
     @staticmethod
     def clone_repo(repo_url: str) -> str:
@@ -68,9 +86,10 @@ class RepoInvestigatorTools:
         }
 
     @staticmethod
-    def analyze_graph_structure(repo_path: str) -> Dict:
+    def analyze_graph_structure(repo_path: str, files_to_scan: Optional[List[str]] = None) -> Dict:
         """
         Uses AST to verify the existence of StateGraph and parallel wiring.
+        If files_to_scan is provided, only those files are analyzed.
         """
         results = {
             "has_stategraph": False,
@@ -80,7 +99,12 @@ class RepoInvestigatorTools:
         }
 
         for root, _, files in os.walk(repo_path):
+            if ".git" in root: continue
             for file in files:
+                rel_path = os.path.relpath(os.path.join(root, file), repo_path)
+                if files_to_scan is not None and rel_path not in files_to_scan:
+                    continue
+                
                 if file.endswith(".py"):
                     file_path = os.path.join(root, file)
                     try:

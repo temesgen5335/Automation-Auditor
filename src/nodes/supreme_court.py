@@ -1,5 +1,6 @@
 from typing import Dict, List
 from src.state import AgentState, AuditReport, CriterionResult, JudicialOpinion, Evidence
+from src.utils.checkpoint_manager import CheckpointManager
 import json
 import os
 from datetime import datetime
@@ -60,17 +61,49 @@ def chief_justice_node(state: AgentState) -> Dict:
             dissent_summary=dissent_summary,
             remediation=tech_lead.argument if tech_lead else "Remediation pending further analysis."
         ))
-
+    # Calculate final baseline score
     overall_score = sum(r.final_score for r in criterion_results) / len(criterion_results) if criterion_results else 0
     
+    # --- Differential Logic ---
+    previous_report = state.get("previous_audit_report")
+    delta_info = None
+    exec_summary = "Swarm-level forensic audit complete. Dialectical conflict resolved via Supreme Court protocols."
+    
+    if previous_report:
+        score_diff = float(overall_score - previous_report.overall_score)
+        changed_files = state.get("changed_files", [])
+        delta_info = {
+            "previous_score": previous_report.overall_score,
+            "score_change": round(score_diff, 2),
+            "changed_files_count": len(changed_files)
+        }
+        if score_diff > 0.5:
+            exec_summary = f"Audit complete. Significant IMPROVEMENT detected (+{score_diff:.2f})."
+        elif score_diff < -0.5:
+            exec_summary = f"Audit complete. Significant REGRESSION detected ({score_diff:.2f})."
+        else:
+            exec_summary = "Audit complete. Minor changes detected since last session."
+
     final_report = AuditReport(
         repo_url=repo_url,
-        executive_summary="Swarm-level forensic audit complete. Dialectical conflict resolved via Supreme Court protocols.",
+        executive_summary=exec_summary,
         overall_score=float(f"{overall_score:.2f}"),
         criteria=criterion_results,
-        remediation_plan="\n".join([f"- {r.dimension_name}: {r.remediation}" for r in criterion_results])
+        remediation_plan="\n".join([f"- {r.dimension_name}: {r.remediation}" for r in criterion_results]),
+        delta_info=delta_info
     )
     
+    # Commit to cache
+    file_hashes = state.get("file_hashes", {})
+    if file_hashes:
+        CheckpointManager.save_audit_metadata(repo_url, file_hashes, final_report)
+
+    # Cleanup temp repo if exists
+    temp_path = state.get("temp_repo_path")
+    if temp_path and os.path.exists(temp_path):
+        import shutil
+        shutil.rmtree(temp_path)
+
     # Write to file (High-Point Requirement) - Now with timestamped folder
     os.makedirs("audits", exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -87,7 +120,13 @@ def chief_justice_node(state: AgentState) -> Dict:
 def generate_markdown_report(report: AuditReport) -> str:
     """Converts the AuditReport object into a formatted Markdown string."""
     md = f"# Audit Report: {report.repo_url}\n\n"
-    md += f"## Overall Score: {report.overall_score:.1f}/5.0\n\n"
+    md += f"## Overall Score: {report.overall_score:.1f}/5.0\n"
+    if report.delta_info:
+        prev = report.delta_info['previous_score']
+        change = report.delta_info['score_change']
+        md += f"*(Previous: {prev:.1f} | Change: {'+' if change > 0 else ''}{change:.2f})*\n"
+    md += "\n"
+    
     md += f"### Executive Summary\n{report.executive_summary}\n\n"
     
     md += "## Criterion Breakdown\n"

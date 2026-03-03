@@ -1,47 +1,93 @@
 from typing import Dict, List
-from src.state import AgentState, Evidence
+from src.state import AgentState, Evidence, AuditReport
 from src.tools.repo_tools import RepoInvestigatorTools
 from src.tools.doc_tools import DocAnalystTools
 from src.tools.vision_tools import VisionInspectorTools
-import os
+from src.utils.checkpoint_manager import CheckpointManager
 import shutil
+import os
+
+def pre_audit_check(state: AgentState) -> Dict:
+    """
+    Clones the repo, checks cache, and identifies changed files.
+    """
+    repo_url = state["repo_url"]
+    
+    # 1. Clone repo to get current state
+    repo_path = RepoInvestigatorTools.clone_repo(repo_url)
+    
+    # 2. Calculate current hashes
+    current_hashes = RepoInvestigatorTools.calculate_repo_hashes(repo_path)
+    
+    # 3. Check for previous audit
+    metadata = CheckpointManager.get_audit_metadata(repo_url)
+    
+    is_delta = False
+    changed_files = list(current_hashes.keys())
+    previous_report = None
+    
+    if metadata:
+        is_delta = True
+        changed_files = CheckpointManager.get_changed_files(repo_url, current_hashes)
+        previous_report = AuditReport(**metadata["report"])
+        
+    return {
+        "is_delta_audit": is_delta,
+        "file_hashes": current_hashes,
+        "changed_files": changed_files,
+        "previous_audit_report": previous_report,
+        "temp_repo_path": repo_path # Pass the path forward to avoid re-cloning
+    }
 
 def repo_investigator_node(state: AgentState) -> Dict:
-    """Collects evidence from the GitHub repository."""
-    repo_url = state["repo_url"]
-    tools = RepoInvestigatorTools()
+    """
+    Analyzes the repository for LangGraph patterns.
+    Supports delta audits by only scanning changed files.
+    """
+    repo_path = state.get("temp_repo_path")
+    if not repo_path:
+        repo_path = RepoInvestigatorTools.clone_repo(state["repo_url"])
     
-    # Forensic Protocol: Clone, analyze history, and AST
-    repo_path = tools.clone_repo(repo_url)
-    try:
-        commits = tools.get_git_log(repo_path)
-        git_analysis = tools.analyze_git_history(commits)
-        ast_analysis = tools.analyze_graph_structure(repo_path)
-        
-        # Create Evidence objects
-        evidences = []
-        evidences.append(Evidence(
-            goal="Identify Git Narrative",
-            found=len(commits) > 0,
-            content=git_analysis["style"],
-            location="git log",
-            rationale=git_analysis["rationale"],
-            confidence=1.0
-        ))
-        
-        evidences.append(Evidence(
-            goal="Verify Graph Structure",
-            found=ast_analysis["has_stategraph"],
-            content=f"Parallelism: {ast_analysis['has_parallelism']}",
-            location="AST Analysis",
-            rationale=", ".join(ast_analysis["details"]) or "No StateGraph found in AST.",
+    changed_files = state.get("changed_files", [])
+    
+    # Analyze graph structure (only scanning changed/new files)
+    graph_structure = RepoInvestigatorTools.analyze_graph_structure(repo_path, files_to_scan=changed_files)
+    
+    # Analyze Git history
+    commits = RepoInvestigatorTools.get_git_log(repo_path)
+    git_style = RepoInvestigatorTools.analyze_git_history(commits)
+    
+    # Cleanup if not using it further (but we might need it for vision/docs)
+    # For now, let's keep it and cleanup at the end of the node or graph.
+    
+    evidence = [
+        Evidence(
+            goal="Identify LangGraph Orchestration",
+            found=graph_structure["has_stategraph"],
+            content=str(graph_structure["details"]),
+            location="Multiple Files",
+            rationale="AST analysis of StateGraph instantiation.",
             confidence=0.9
-        ))
-        
-        return {"evidences": {"repo_evidence": evidences}}
-    finally:
-        # Cleanup cloned repo
-        shutil.rmtree(repo_path)
+        ),
+        Evidence(
+            goal="Verify Parallel Wiring",
+            found=graph_structure["has_parallelism"],
+            content="Detected fan-out/fan-in patterns.",
+            location="Multiple Files",
+            rationale="AST analysis of add_edge with list arguments.",
+            confidence=0.85
+        ),
+        Evidence(
+            goal="Analyze Git Style",
+            found=True,
+            content=git_style["style"],
+            location="Git Log",
+            rationale=git_style["rationale"],
+            confidence=1.0
+        )
+    ]
+    
+    return {"evidences": {"repo_evidence": evidence}}
 
 def doc_analyst_node(state: AgentState) -> Dict:
     """Collects evidence from the PDF report."""

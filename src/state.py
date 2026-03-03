@@ -46,18 +46,38 @@ class AuditReport(BaseModel):
     overall_score: float
     criteria: List[CriterionResult]
     remediation_plan: str
+    delta_info: Optional[Dict] = Field(
+        default=None,
+        description="Metadata for differential reports (e.g., score changes, new files)"
+    )
+
+def merge_evidences(left: Dict[str, List[Evidence]], right: Dict[str, List[Evidence]]) -> Dict[str, List[Evidence]]:
+    """Merges evidence dictionaries by appending lists for matching keys."""
+    combined = left.copy()
+    for key, value in right.items():
+        if key in combined:
+            combined[key] = combined[key] + value
+        else:
+            combined[key] = value
+    return combined
 
 # --- Graph State ---
 class AgentState(TypedDict):
     repo_url: str
     pdf_path: str
     rubric_dimensions: List[Dict]
-    # Use reducers to prevent parallel agents
-    # from overwriting data
+    # Use custom reducer to merge evidence lists
     evidences: Annotated[
-        Dict[str, List[Evidence]], operator.ior
+        Dict[str, List[Evidence]], merge_evidences
     ]
     opinions: Annotated[
         List[JudicialOpinion], operator.add
     ]
     final_report: AuditReport
+    
+    # Delta & Caching Fields
+    file_hashes: Dict[str, str]
+    is_delta_audit: bool
+    previous_audit_report: Optional[AuditReport]
+    changed_files: List[str]
+    temp_repo_path: Optional[str] # ephemeral field

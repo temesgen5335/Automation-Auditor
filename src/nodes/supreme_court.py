@@ -1,6 +1,8 @@
 from typing import Dict, List
 from src.state import AgentState, AuditReport, CriterionResult, JudicialOpinion, Evidence
 import json
+import os
+from datetime import datetime
 
 def chief_justice_node(state: AgentState) -> Dict:
     """
@@ -26,49 +28,59 @@ def chief_justice_node(state: AgentState) -> Dict:
         defense = next((op for op in ops if op.judge == "Defense"), None)
         tech_lead = next((op for op in ops if op.judge == "TechLead"), None)
         
-        # Hardcoded Deliberation Protocols
+        # Hardcoded Deliberation Protocols (High-Point Criteria)
+        # 1. Functionality Weight: Tech Lead carries highest weight for architecture
         final_score = tech_lead.score if tech_lead else 3
         dissent_summary = None
         
-        # Rule of Security: Prosecutor overrides if score is 1
+        # 2. Security Override: Prosecutor identifies confirmed security vulnerability
         if prosecutor and prosecutor.score == 1:
+            # Security flaws cap the score at 3 regardless of Tech Lead/Defense
             final_score = min(final_score, 3)
-            dissent_summary = "Security Rule: Prosecutor identified critical flaws. Score capped."
+            dissent_summary = "Security Rule: Critical vulnerability detected by Prosecutor. Score capped."
         
-        # Rule of Functionality: Tech Lead weight for Architecture
-        if crit_id == "langgraph_arch" and tech_lead:
-            final_score = tech_lead.score
-            
-        # Rule of Evidence: Overrule defense if evidence is missing
+        # 3. Evidence Rule: Detectors overrule unsupported judge claims
         repo_evidence = evidences.get("repo_evidence", [])
         has_graph = any(ev.found for ev in repo_evidence if "Graph" in ev.goal)
         if defense and defense.score > 3 and not has_graph:
+            # If Defense claims merit but RepoInvestigator found no graph, overrule for hallucination
             final_score = min(final_score, 2)
-            dissent_summary = "Evidence Rule: Defense claims of merit not supported by repository artifacts."
+            dissent_summary = "Evidence Rule: Defense claims of merit overridden due to lack of repository evidence."
 
-        # Calculate variance for dissent summary
+        # Variance check for mandatory dissent summary
         scores = [op.score for op in ops]
-        if max(scores) - min(scores) > 2 and not dissent_summary:
-            dissent_summary = f"High Variance: Significant disagreement between judges (Range: {min(scores)}-{max(scores)})."
+        if scores and (max(scores) - min(scores) > 2) and not dissent_summary:
+            dissent_summary = f"High Variance Rule: Judges strongly disagreed ({min(scores)} to {max(scores)}). tech Lead as tie-breaker."
 
         criterion_results.append(CriterionResult(
             dimension_id=crit_id,
-            dimension_name=crit_id.replace("_", " ").title(), # Simplified mapping
+            dimension_name=crit_id.replace("_", " ").title(),
             final_score=final_score,
             judge_opinions=ops,
             dissent_summary=dissent_summary,
-            remediation=tech_lead.argument if tech_lead else "Improve modularity and structure."
+            remediation=tech_lead.argument if tech_lead else "Remediation pending further analysis."
         ))
 
     overall_score = sum(r.final_score for r in criterion_results) / len(criterion_results) if criterion_results else 0
     
     final_report = AuditReport(
         repo_url=repo_url,
-        executive_summary="Automaton Auditor has completed the forensic analysis and judicial deliberation.",
-        overall_score=overall_score,
+        executive_summary="Swarm-level forensic audit complete. Dialectical conflict resolved via Supreme Court protocols.",
+        overall_score=float(f"{overall_score:.2f}"),
         criteria=criterion_results,
         remediation_plan="\n".join([f"- {r.dimension_name}: {r.remediation}" for r in criterion_results])
     )
+    
+    # Write to file (High-Point Requirement) - Now with timestamped folder
+    os.makedirs("audits", exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_filename = f"audits/audit_report_{timestamp}.md"
+    
+    report_md = generate_markdown_report(final_report)
+    with open(report_filename, "w") as f:
+        f.write(report_md)
+    
+    print(f"\nAudit completed. Report saved to: {report_filename}")
     
     return {"final_report": final_report}
 

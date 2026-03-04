@@ -72,10 +72,18 @@ def repo_investigator_node(state: AgentState) -> Dict:
         Evidence(
             goal="Verify Parallel Wiring",
             found=graph_structure["has_parallelism"],
-            content="Detected fan-out/fan-in patterns.",
+            content="Detected explicit fan-out/fan-in connectivity or list-based edges.",
             location="Multiple Files",
-            rationale="AST analysis of add_edge with list arguments.",
-            confidence=0.85
+            rationale="Aggressive AST connectivity analysis of add_edge calls.",
+            confidence=0.95
+        ),
+        Evidence(
+            goal="Identify State Reducers",
+            found=graph_structure["has_reducers"],
+            content="Detected operator imports or Annotated reducer patterns.",
+            location="Multiple Files",
+            rationale="AST scan for Annotated types with multi-argument slices.",
+            confidence=0.9
         ),
         Evidence(
             goal="Analyze Git Style",

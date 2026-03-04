@@ -10,6 +10,11 @@ def chief_justice_node(state: AgentState) -> Dict:
     Synthesizes judicial opinions into a final verdict.
     Resolves conflicts using hardcoded deterministic logic.
     """
+    # Short-circuit for delta audits with no changes
+    if state.get("is_delta_audit") and not state.get("changed_files") and state.get("previous_audit_report"):
+        print("Delta Audit: No changes. Reusing cached report.")
+        return {"final_report": state["previous_audit_report"]}
+
     opinions = state.get("opinions", [])
     evidences = state.get("evidences", {})
     repo_url = state["repo_url"]
@@ -43,10 +48,18 @@ def chief_justice_node(state: AgentState) -> Dict:
         # 3. Evidence Rule: Detectors overrule unsupported judge claims
         repo_evidence = evidences.get("repo_evidence", [])
         has_graph = any(ev.found for ev in repo_evidence if "Graph" in ev.goal)
+        has_parallel = any(ev.found for ev in repo_evidence if "Parallel" in ev.goal)
+        has_reducer = any(ev.found for ev in repo_evidence if "Reducer" in ev.goal)
+        
         if defense and defense.score > 3 and not has_graph:
             # If Defense claims merit but RepoInvestigator found no graph, overrule for hallucination
             final_score = min(final_score, 2)
-            dissent_summary = "Evidence Rule: Defense claims of merit overridden due to lack of repository evidence."
+            if not dissent_summary: dissent_summary = "Evidence Rule: Defense claims of merit overridden due to lack of repository evidence."
+        
+        # 4. Concurrency Risk: Parallelism without Reducers is a major maintainability flaw
+        if has_parallel and not has_reducer:
+            final_score = min(final_score, 2)
+            dissent_summary = "Concurrency Rule: Parallelism detected without state reducers. High risk of state collision."
 
         # Variance check for mandatory dissent summary
         scores = [op.score for op in ops]

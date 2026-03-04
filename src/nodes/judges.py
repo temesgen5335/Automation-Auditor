@@ -36,11 +36,16 @@ def judge_node_factory(judge_type: str):
 
         persona_prompts = {
             "Prosecutor": "You are the Prosecutor. Your philosophy is 'Trust No One. Assume Vibe Coding.' "
-                          "Scrutinize the evidence for gaps, security flaws, and laziness. Be harsh but objective.",
+                          "Strictly look for missing reducers, dead-end nodes, and unverified parallel wiring. "
+                          "If evidence is missing (e.g., pdf_path not found), penalize heavily for infrastructure negligence.",
             "Defense": "You are the Defense Attorney. Your philosophy is 'Reward Effort and Intent. Look for the Spirit of the Law.' "
-                       "Highlight creative workarounds and deep thought even if implementation is imperfect.",
+                       "If structural markers (StateGraph) are present, assume successful orchestration. "
+                       "Interpret partial evidence (like fan-out patterns) as progress towards full parallelism. "
+                       "Value documentation intent even if the specific file was missing during the scan.",
             "TechLead": "You are the Tech Lead. Your philosophy is 'Does it actually work? Is it maintainable?' "
-                        "Evaluate architectural soundness and practical viability. You are the pragmatic tie-breaker."
+                        "Prioritize the existence of state reducers and typed state for maintainability score. "
+                        "Evaluate if the graph connectivity matches the described architectural goals. "
+                        "Be the pragmatic voice that balances the Prosecutor's rigor and the Defense's leniency."
         }
 
         judge_model = get_judge_model(judge_type)

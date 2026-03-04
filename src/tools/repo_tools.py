@@ -95,6 +95,7 @@ class RepoInvestigatorTools:
             "has_stategraph": False,
             "has_parallelism": False,
             "has_typed_state": False,
+            "has_reducers": False,
             "details": []
         }
 
@@ -121,6 +122,8 @@ class RepoInvestigatorTools:
                             results["has_parallelism"] = True
                         if visitor.found_typed_state:
                             results["has_typed_state"] = True
+                        if visitor.found_reducers:
+                            results["has_reducers"] = True
                         
                         if visitor.found_stategraph:
                             results["details"].append(f"Found StateGraph in {file}")
@@ -135,7 +138,10 @@ class LangGraphVisitor(ast.NodeVisitor):
         self.found_stategraph = False
         self.found_parallelism = False
         self.found_typed_state = False
+        self.found_reducers = False
         self.graph_builder_names = set()
+        self.node_sources = {} # source_node -> [target_nodes]
+        self.node_targets = {} # target_node -> [source_nodes]
 
     def visit_ImportFrom(self, node):
         if node.module == "langgraph.graph":
@@ -144,12 +150,33 @@ class LangGraphVisitor(ast.NodeVisitor):
                     self.found_stategraph = True
         if node.module in ["typing", "pydantic", "typing_extensions"]:
             self.found_typed_state = True
+        if node.module == "operator":
+            self.found_reducers = True # Often used with operator.add
+        self.generic_visit(node)
+
+    def visit_AnnAssign(self, node):
+        # Detect Annotated[List[Evidence], operator.add] or similar reducer patterns
+        if isinstance(node.annotation, ast.Subscript):
+            if isinstance(node.annotation.value, ast.Name) and node.annotation.value.id == "Annotated":
+                # Look for second argument of Annotated
+                if hasattr(node.annotation, 'slice'):
+                    slice_val = node.annotation.slice
+                    if isinstance(slice_val, ast.Tuple) and len(slice_val.elts) > 1:
+                        # Check if the second part looks like a reducer (operator or custom)
+                        self.found_reducers = True
         self.generic_visit(node)
 
     def visit_Assign(self, node):
         # Look for builder = StateGraph(State)
         if isinstance(node.value, ast.Call):
-            if isinstance(node.value.func, ast.Name) and node.value.func.id == "StateGraph":
+            func = node.value.func
+            name = ""
+            if isinstance(func, ast.Name):
+                name = func.id
+            elif isinstance(func, ast.Attribute):
+                name = func.attr
+            
+            if name == "StateGraph":
                 for target in node.targets:
                     if isinstance(target, ast.Name):
                         self.graph_builder_names.add(target.id)
@@ -157,20 +184,47 @@ class LangGraphVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_Call(self, node):
-        # Look for builder.add_edge(["node1", "node2"], "node3") or similar list inputs implying fan-in
-        # Or multiple edges from same node implying fan-out
+        # Look for builder.add_edge("source", "target")
         if isinstance(node.func, ast.Attribute) and node.func.attr == "add_edge":
-            # Simple check for list in arguments (fan-in pattern)
-            for arg in node.args:
-                if isinstance(arg, ast.List):
+            if len(node.args) >= 2:
+                source = self._get_name(node.args[0])
+                target = self._get_name(node.args[1])
+                
+                if source and target:
+                    # Collect connectivity for fan-out/fan-in detection
+                    if source not in self.node_sources: self.node_sources[source] = []
+                    self.node_sources[source].append(target)
+                    
+                    if target not in self.node_targets: self.node_targets[target] = []
+                    self.node_targets[target].append(source)
+
+                # Direct list input (multi-edge)
+                if any(isinstance(arg, ast.List) for arg in node.args):
                     self.found_parallelism = True
         
+        # Detect fan-out (one source, multiple targets)
+        for targets in self.node_sources.values():
+            if len(targets) > 1:
+                self.found_parallelism = True
+        
+        # Detect fan-in (multiple sources, one target)
+        for sources in self.node_targets.values():
+            if len(sources) > 1:
+                self.found_parallelism = True
+
         # Look for builder.add_node
         if isinstance(node.func, ast.Attribute) and node.func.attr == "add_node":
              if isinstance(node.func.value, ast.Name) and node.func.value.id in self.graph_builder_names:
-                 self.found_stategraph = True
+                  self.found_stategraph = True
                  
         self.generic_visit(node)
+
+    def _get_name(self, node):
+        if isinstance(node, ast.Constant):
+            return str(node.value)
+        elif isinstance(node, ast.Name):
+            return node.id
+        return None
 
 if __name__ == "__main__":
     # Quick self-test logic can go here

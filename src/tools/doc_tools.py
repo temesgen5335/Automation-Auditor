@@ -12,11 +12,19 @@ class DocAnalystTools:
         self.converter = DocumentConverter()
 
     def ingest_pdf(self, pdf_path: str) -> str:
-        """Parses a PDF and returns the full text content."""
+        """Parses a PDF and returns the full text content. Includes fallback discovery."""
+        actual_path = pdf_path
         if not os.path.exists(pdf_path):
-            raise FileNotFoundError(f"PDF not found at {pdf_path}")
+            print(f"Target PDF {pdf_path} not found. Searching for fallbacks in root...")
+            # Fallback search
+            potential_pdfs = [f for f in os.listdir(".") if f.endswith(".pdf")]
+            if potential_pdfs:
+                actual_path = potential_pdfs[0]
+                print(f"Found fallback PDF: {actual_path}")
+            else:
+                raise FileNotFoundError(f"No PDF found at {pdf_path} and no fallbacks available.")
         
-        result = self.converter.convert(pdf_path)
+        result = self.converter.convert(actual_path)
         return result.document.export_to_markdown()
 
     @staticmethod

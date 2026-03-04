@@ -61,13 +61,13 @@ def create_auditor_graph(checkpointer):
         }
     )
     
-    # Pre-audit check also triggers other detectives if not skipped
-    workflow.add_edge("pre_audit_check", "doc_analyst")
-    workflow.add_edge("pre_audit_check", "vision_inspector")
+    # Conditional branches for other detectives also tied to audit decision
+    workflow.add_edge("repo_investigator", "doc_analyst")
+    workflow.add_edge("repo_investigator", "vision_inspector")
 
-    workflow.add_edge("repo_investigator", "evidence_aggregator")
     workflow.add_edge("doc_analyst", "evidence_aggregator")
     workflow.add_edge("vision_inspector", "evidence_aggregator")
+    workflow.add_edge("repo_investigator", "evidence_aggregator")
 
     workflow.add_conditional_edges(
         "evidence_aggregator",

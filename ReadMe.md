@@ -1,61 +1,116 @@
-# Automaton Auditor
+# Automaton Auditor: Autonomous Code Governance Swarm
 
-The Automaton Auditor is a production-grade multi-agent swarm built with LangGraph for autonomous governance of AI-generated code.
+[![LangGraph](https://img.shields.io/badge/Orchestration-LangGraph-blue)](https://github.com/langchain-ai/langgraph)
+[![Docling](https://img.shields.io/badge/Forensics-Docling-green)](https://github.com/DS4SD/docling)
+[![Streamlit](https://img.shields.io/badge/Built%20with-Streamlit-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io/)
 
-## Architecture: The Digital Courtroom
-The system operates as a hierarchical graph with three distinct layers:
+The Automaton Auditor is a production-grade multi-agent swarm designed for the autonomous governance and forensic analysis of AI-generated repositories. It evaluates codebases against architectural best practices (specifically LangGraph patterns) using a dialectical judicial process.
 
-1. Detective Layer (Forensic Sub-Agents):
+---
 
-* RepoInvestigator: Uses Python's ast module to verify code structure and git log for process analysis.
-* DocAnalyst: Uses Docling to parse PDF reports and extract theoretical depth.
-* VisionInspector: (Skeleton) Extracts diagrams for multimodal architectural verification.
+<!-- ## 📽️ Demo & Interface
+*Placeholder for Demo Video*
+> [Insert Video Link/Embed Here] -->
 
-2. Judicial Layer (The Dialectical Bench):
+## Streamlit UI
+> ![Streamlit UI](assets/swarm-serveillance.png)
+> ![Streamlit UI](assets/self-audit-v1.png)
+> ![Streamlit UI](assets/self-audit-v2.png)
 
-* Prosecutor: Critical lens, focuses on security and "vibe coding."
-* Defense: Optimistic lens, rewards effort and intent.
-* Tech Lead: Pragmatic lens, evaluates technical debt and viability.
-* These judges run in parallel and use structured output to provide scores and arguments.
+---
 
-3. Supreme Court (Synthesis Engine):
+## 🔴 The Problem
+In high-velocity AI-assisted development, architectural drift is common. Systems built with complex frameworks like LangGraph often suffer from "vibe coding"—where the outward structure looks correct, but core mechanisms like **parallel state reducers**, **typed state transitions**, and **deterministic synthesis** are missing or broken. Manual auditing of these patterns is slow and error-prone.
 
-* ChiefJusticeNode: Resolves conflicts between judges using hardcoded deterministic rules (e.g., Rule of Security, Rule of Evidence).
-* Generates a final structured Audit Report in Markdown.
+## 🟢 The Solution (Purpose)
+Automaton Auditor automates this governance by deploying a swarm of specialized agents:
+1.  **Detectives**: Perform deep forensic analysis (AST parsing, Git history, PDF RAG).
+2.  **Judges**: Evaluate evidence through conflicting personas (Prosecutor, Defense, Tech Lead).
+3.  **Supreme Court**: Synthesizes a final verdict with deterministic rules and security caps.
 
-### Key Features
-* Fan-out/Fan-in Orchestration: Parallel detectives and parallel judges synchronized via LangGraph.
-* Typed State Management: Uses Pydantic and TypedDict with custom reducers (operator.add, operator.ior) to prevent data overwriting in parallel branches.
-* Forensic Precision: Moves beyond simple RAG by using specialized tools for code and document analysis.
+---
 
-### Project Structure
-text
+## 🏗️ Architecture: The Digital Courtroom
 
-Automation_Auditor/
-├── src/
-│   ├── state.py          # Core Pydantic schemas and AgentState
-│   ├── nodes/
-│   │   ├── detectives.py # Detective nodes
-│   │   ├── judges.py     # Judicial nodes & persona logic
-│   │   └── supreme_court.py # Synthesis & report generation
-│   └── tools/
-│       ├── repo_tools.py # AST & Git forensic tools
-│       ├── doc_tools.py  # Docling PDF parsing
-│       └── vision_tools.py # Vision extraction
-├── main.py               # LangGraph orchestration
-├── rubric.json           # Dynamic scoring criteria
-└── pyproject.toml        # uv configuration
+```mermaid
+graph TD
+    A[Repo URL / PDF Path] --> B[Pre-Audit Check]
+    B -->|Changes?| C{Delta Decision}
+    C -->|Yes / New| D[Detective Swarm]
+    C -->|No| E[Supreme Court]
+    
+    subgraph Detectives
+        D1[Repo Investigator]
+        D2[Doc Analyst]
+        D3[Vision Inspector]
+    end
+    
+    D1 & D2 & D3 --> F[Evidence Aggregator]
+    F --> G[Judges Bench]
+    
+    subgraph Judges
+        J1[Prosecutor]
+        J2[Defense]
+        J3[Tech Lead]
+    end
+    
+    J1 & J2 & J3 --> E[Supreme Court]
+    E --> H[Final Report & Metadata]
+```
 
-### Verification Results
-* Infrastructure: Project initialized with uv, dependencies managed.
-* State Schema: Verified via Pydantic model validation.
-* Graph Wiring: Fan-out/Fan-in branches verified in 
-main.py
-.
- Forensic Tools: 
-RepoInvestigatorTools
- (AST) and 
-DocAnalystTools
- (Docling) integrated.
- 
-Built with LangChain, LangGraph, and LangSmith.
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Python 3.10+
+- [uv](https://github.com/astral-sh/uv) (Recommended package manager)
+- OpenAI API Key (Configured in `.env`)
+
+### Installation
+```bash
+# Clone the repository
+git clone <repo-url>
+cd Automation_Auditor
+
+# Install dependencies using uv
+uv sync
+```
+
+### Usage
+
+#### CLI (Core Audit)
+```bash
+# Run a full audit on a local directory or remote repo
+uv run python main.py . --pdf path/to/report.pdf --thread-id audit-001
+```
+
+#### Streamlit Dashboard (Visual GUI)
+```bash
+# Launch the monitoring dashboard
+uv run streamlit run app.py
+```
+
+---
+
+## 📈 Performance: Self-Audit Growth
+To verify the system's own sophistication, the Auditor was subjected to a "Self-Audit" before and after a major focus on architectural excellence.
+
+| Milestone | Overall Score | Key Improvements |
+| :--- | :--- | :--- |
+| **v1.0 (Baseline)** | **1.7 / 5.0** | Basic graph, missing reducers, brittle PDF handling. |
+| **v2.0 (Upgraded)** | **4.0 / 5.0** | Parallel branches, state reducers, robust fallback discovery, judicial nuance. |
+
+> [!TIP]
+> **Why the score jumped?**
+> The upgrade introduced **AST-level connectivity analysis** for fan-out/fan-in detection and verified the existence of **Annotated state reducers**, moving the project from "vibe coding" to "engineered architecture."
+
+---
+
+## 🛠️ Senior Engineer's Quick Reference
+- **State Reducers**: See `src/state.py`. We use `operator.add` for list merges and `merge_evidences` for dictionary synchronization.
+- **AST Visitor**: See `src/tools/repo_tools.py`. The `LangGraphVisitor` tracks `node_sources` and `node_targets` for true connectivity verification.
+- **Synthesis Logic**: See `src/nodes/supreme_court.py`. Deterministic rules like the `Rule of Security` can cap scores regardless of judicial opinion.
+
+---
+
